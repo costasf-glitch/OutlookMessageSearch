@@ -19,71 +19,98 @@ namespace OutlookMessageSearch
         private static Application outlookInstance = new Application();
         private static NameSpace outlookNameSpace = outlookInstance.GetNamespace("mapi");
         
-        static void Main(string[] args)
+        // Get a list of the EntryIDs for each folder
+        // We need this because entering a folder requires the EntryID
+        private static List<string> getFolders()
         {
-            // Get the inbox folder
-            Folder outlookFolder = (Folder)outlookNameSpace.GetDefaultFolder(OlDefaultFolders.olFolderInbox);
+            List<string> namespaceFolders = new List<string>();
+            
+            Console.WriteLine("Listing all the folders now");
+            Folders outlookFolders = outlookNameSpace.Folders;
+
+            foreach (Folder selectedFolder in outlookFolders)
+            {
+                namespaceFolders.Add(selectedFolder.EntryID);
+                
+                //Console.WriteLine($"Searching through: {selectedFolder.Name}");
+
+                // TODO: This does not go through subfolders.  Will need to adjust code later
+                foreach (Folder selectedSubFolder in selectedFolder.Folders)
+                {
+                  //  Console.WriteLine($"{selectedSubFolder.Name}: Folder ID is: {selectedSubFolder.EntryID}");
+                    namespaceFolders.Add(selectedSubFolder.EntryID);
+                }
+            }
+            return namespaceFolders;
+        }
+
+        private static string getMessageID(MailItem currentMessage)
+        {
+            const string PR_INTERNET_MESSAGE_ID_W_TAG = "http://schemas.microsoft.com/mapi/proptag/0x1035001F";
+            PropertyAccessor oPropAccessor = currentMessage.PropertyAccessor;
+            
+            string messageID = (string)oPropAccessor.GetProperty(PR_INTERNET_MESSAGE_ID_W_TAG);
+            return messageID;
+        }
+
+        private static bool findMessageByID(string messageID, string folderEntryID)
+        {
+            // Select the active folder
+            Folder outlookFolder = (Folder)outlookNameSpace.GetFolderFromID(folderEntryID);
 
             // Get a collection of items in the selected folder
             Items outlookItems = outlookFolder.Items;
 
-            
-            // Can be sorted by any property in the item type.  In this case, these are MailItem
-            outlookItems.Sort("[ReceivedTime]",false);
-
-            // Get the first (or last) message (for testing purposes to see if this works)
-            MailItem outlookMessage = (MailItem)outlookItems.GetFirst();
-            outlookMessage = (MailItem)outlookItems.GetNext();
-
+            // Can be sorted by any property in the item type.  In this case, the item type should be
+            // MailItem, and we are sorting by Received Time in from newest to oldest
+            outlookItems.Sort("[ReceivedTime]", true);
 
             // Iterate through all MailItems in the folder looking for a specific EntryID
             foreach (Object outlookItem in outlookItems)
             {
                 if (outlookItem is MailItem)
                 {
+                    // convert object to a MailItem for further processing
                     MailItem mailItem = outlookItem as MailItem;
-                    Console.WriteLine(mailItem.Subject);
-                }
-                else
-                {
-                    Console.WriteLine("SOMETHING THAT IS NOT AN EMAIL");
+
+                    // extract the message id from the current message
+                    string currentMessageID = getMessageID(mailItem);
+                    //Console.WriteLine($"Message received on: {mailItem.ReceivedTime} from: {mailItem.SenderName}");
+
+                    // compare it to the message id we are looking for
+                    if(currentMessageID == messageID)
+                    {
+                        Console.WriteLine($"We found the message with the subject {mailItem.Subject}");
+
+                        Console.WriteLine("Attempting to open a specific Outlook message via the shell");
+
+                        string strCommandText = $"/select \"outlook:{mailItem.EntryID}\"";
+
+                        System.Diagnostics.Process.Start("outlook.exe", strCommandText);
+                        
+                        return true;
+                    }
                 }
             }
+            return false;
+        }
 
-            // Code Snippet: Iterate through all Folders in my namespace
-            Console.WriteLine("Listing all the folders now");
-            Folders outlookFolders = outlookNameSpace.Folders;
+        // main function takes a command line argument which is the message ID
+        // example being: <BN7PR05MB4322089E8B3FD6E287A05319C85B9@BN7PR05MB4322.namprd05.prod.outlook.com>
+        static void Main(string[] args)
+        {
+            List<string> folderNames = getFolders();
 
-            foreach(Folder selectedFolder in outlookFolders)
+            foreach(string name in folderNames)
             {
-                Console.WriteLine($"Searching through: {selectedFolder.Name}");
-
-                foreach(Folder selectedSubFolder in selectedFolder.Folders)
-                {
-                    Console.WriteLine(selectedSubFolder.Name);
-                }
+                //findMessageByID("<BN7PR05MB4322089E8B3FD6E287A05319C85B9@BN7PR05MB4322.namprd05.prod.outlook.com>", name);
+                if(findMessageByID(args[0], "000000006C5F7C2868207944B3CA43011342594901005AC540F88BEA6E4995B7DAB7B8B93FC300000000013C0000"))
+                    break;
             }
 
-            // See if this worked
-            //Console.WriteLine(outlookMessage.Subject);
-            //Console.WriteLine(outlookMessage.EntryID);
-
-
-            // Extract a Message ID from the active message
-            const string PR_INTERNET_MESSAGE_ID_W_TAG = "http://schemas.microsoft.com/mapi/proptag/0x1035001F";
-            PropertyAccessor oPropAccessor = outlookMessage.PropertyAccessor;
-            string messageID = (string)oPropAccessor.GetProperty(PR_INTERNET_MESSAGE_ID_W_TAG);
-            Console.WriteLine(messageID);
-
-
-            Console.WriteLine("Attempting to open a specific Outlook message via the shell");
-
-            string strCommandText = $"/select \"outlook:{outlookMessage.EntryID}\"";
-
-            Console.WriteLine(strCommandText);
-
-            System.Diagnostics.Process.Start("outlook.exe", strCommandText);
-            Console.ReadKey();
+            // Explicitly release objects
+            outlookInstance = null;
+            outlookNameSpace = null;
         }
     }
 }
