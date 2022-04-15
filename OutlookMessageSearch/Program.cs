@@ -63,36 +63,55 @@ namespace OutlookMessageSearch
 
             // Can be sorted by any property in the item type.  In this case, the item type should be
             // MailItem, and we are sorting by Received Time in from newest to oldest
-            outlookItems.Sort("[ReceivedTime]", true);
+            //outlookItems.Sort("[ReceivedTime]", true);
 
-            // Iterate through all MailItems in the folder looking for a specific EntryID
-            foreach (Object outlookItem in outlookItems)
+            Console.WriteLine($"Searching in {outlookFolder.Name}...");
+            string filter = $"@SQL=\"http://schemas.microsoft.com/mapi/proptag/0x1035001F\" = '{messageID}'";
+            MailItem foundMessage = outlookItems.Find(filter);
+
+            if(foundMessage != null)
             {
-                if (outlookItem is MailItem)
-                {
-                    // convert object to a MailItem for further processing
-                    MailItem mailItem = outlookItem as MailItem;
+                Console.WriteLine($"Subject name here is {foundMessage.Subject}");
+                string strCommandText = $"/select \"outlook:{foundMessage.EntryID}\"";
 
-                    // extract the message id from the current message
-                    string currentMessageID = getMessageID(mailItem);
-                    //Console.WriteLine($"Message received on: {mailItem.ReceivedTime} from: {mailItem.SenderName}");
-
-                    // compare it to the message id we are looking for
-                    if(currentMessageID == messageID)
-                    {
-                        Console.WriteLine($"We found the message with the subject {mailItem.Subject}");
-
-                        Console.WriteLine("Attempting to open a specific Outlook message via the shell");
-
-                        string strCommandText = $"/select \"outlook:{mailItem.EntryID}\"";
-
-                        System.Diagnostics.Process.Start("outlook.exe", strCommandText);
-                        
-                        return true;
-                    }
-                }
+                System.Diagnostics.Process.Start("outlook.exe", strCommandText);
+                
+                return true;
             }
-            return false;
+            else
+            {
+                return false;
+            }
+            
+            // MAY NOT NEED THE CODE BELOW IF THE CODE ABOVE IS ROBUST
+            // Iterate through all MailItems in the folder looking for a specific EntryID
+            //foreach (Object outlookItem in outlookItems)
+            //{
+            //    if (outlookItem is MailItem)
+            //    {
+            //        // convert object to a MailItem for further processing
+            //        MailItem mailItem = outlookItem as MailItem;
+
+            //        // extract the message id from the current message
+            //        string currentMessageID = getMessageID(mailItem);
+            //        //Console.WriteLine($"Message received on: {mailItem.ReceivedTime} from: {mailItem.SenderName}");
+
+            //        // compare it to the message id we are looking for
+            //        if(currentMessageID == messageID)
+            //        {
+            //            Console.WriteLine($"We found the message with the subject {mailItem.Subject}");
+
+            //            Console.WriteLine("Attempting to open a specific Outlook message via the shell");
+
+            //            string strCommandText = $"/select \"outlook:{mailItem.EntryID}\"";
+
+            //            System.Diagnostics.Process.Start("outlook.exe", strCommandText);
+                        
+            //            return true;
+            //        }
+            //    }
+            //}
+            //return false;
         }
 
         // main function takes a command line argument which is the message ID
@@ -104,8 +123,9 @@ namespace OutlookMessageSearch
             foreach(string name in folderNames)
             {
                 //findMessageByID("<BN7PR05MB4322089E8B3FD6E287A05319C85B9@BN7PR05MB4322.namprd05.prod.outlook.com>", name);
-                if(findMessageByID(args[0], "000000006C5F7C2868207944B3CA43011342594901005AC540F88BEA6E4995B7DAB7B8B93FC300000000013C0000"))
-                    break;
+                // if(findMessageByID(args[0], "000000006C5F7C2868207944B3CA43011342594901005AC540F88BEA6E4995B7DAB7B8B93FC300000000013C0000"))
+                if (findMessageByID(args[0], name))
+                        break;
             }
 
             // Explicitly release objects
