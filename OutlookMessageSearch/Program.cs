@@ -55,6 +55,10 @@ namespace OutlookMessageSearch
                     crawlFolders((Folder)selectedSubFolder);
                 }
             }
+            
+            // This is just for me because I have a number of folders and it seems that
+            // the most useful ones are at the end of the list.
+            namespaceFolders.Reverse();
 
             return namespaceFolders;
         }
