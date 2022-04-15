@@ -19,6 +19,8 @@ namespace OutlookMessageSearch
         private static Application outlookInstance = new Application();
         private static NameSpace outlookNameSpace = outlookInstance.GetNamespace("mapi");
 
+        private static List<string> namespaceFolders = new List<string>();
+
         // Utility method to decode the URI for the task (mostly because browser's will replace special
         // characters like the '<' and '>' found in the URI
         private static string base64Decode(string base64EncodedData)
@@ -29,26 +31,31 @@ namespace OutlookMessageSearch
 
         // Get a list of the EntryIDs for each folder
         // We need this because entering a folder requires the EntryID
-        private static List<string> getFolders()
+        private static void getFolders()
         {
-            List<string> namespaceFolders = new List<string>();
-            
             Console.WriteLine("Listing all the folders now");
             Folders outlookFolders = outlookNameSpace.Folders;
 
             foreach (Folder selectedFolder in outlookFolders)
             {
-                namespaceFolders.Add(selectedFolder.EntryID);
-                
-                //Console.WriteLine($"Searching through: {selectedFolder.Name}");
+                crawlFolders(selectedFolder);
+            }
+        }
 
-                // TODO: This does not go through subfolders.  Will need to adjust code later
+        private static List <string> crawlFolders(Folder selectedFolder)
+        {
+            namespaceFolders.Add(selectedFolder.EntryID);
+
+            // if the selected folder has subfolders, do some recursion through the function
+            // to add it to the list
+            if (selectedFolder.Folders.Count != 0)
+            {
                 foreach (Folder selectedSubFolder in selectedFolder.Folders)
                 {
-                  //  Console.WriteLine($"{selectedSubFolder.Name}: Folder ID is: {selectedSubFolder.EntryID}");
-                    namespaceFolders.Add(selectedSubFolder.EntryID);
+                    crawlFolders((Folder)selectedSubFolder);
                 }
             }
+
             return namespaceFolders;
         }
 
@@ -69,17 +76,14 @@ namespace OutlookMessageSearch
             // Get a collection of items in the selected folder
             Items outlookItems = outlookFolder.Items;
 
-            // Can be sorted by any property in the item type.  In this case, the item type should be
-            // MailItem, and we are sorting by Received Time in from newest to oldest
-            //outlookItems.Sort("[ReceivedTime]", true);
-
+            // Look through each folder for the specific message
             Console.WriteLine($"Searching in {outlookFolder.Name}...");
             string filter = $"@SQL=\"http://schemas.microsoft.com/mapi/proptag/0x1035001F\" = '{messageID}'";
             MailItem foundMessage = outlookItems.Find(filter);
 
             if(foundMessage != null)
             {
-                Console.WriteLine($"Subject name here is {foundMessage.Subject}");
+                Console.WriteLine($"Found the message with subject: {foundMessage.Subject}");
                 string strCommandText = $"/select \"outlook:{foundMessage.EntryID}\"";
 
                 System.Diagnostics.Process.Start("outlook.exe", strCommandText);
@@ -90,58 +94,29 @@ namespace OutlookMessageSearch
             {
                 return false;
             }
-            
-            // MAY NOT NEED THE CODE BELOW IF THE CODE ABOVE IS ROBUST
-            // Iterate through all MailItems in the folder looking for a specific EntryID
-            //foreach (Object outlookItem in outlookItems)
-            //{
-            //    if (outlookItem is MailItem)
-            //    {
-            //        // convert object to a MailItem for further processing
-            //        MailItem mailItem = outlookItem as MailItem;
-
-            //        // extract the message id from the current message
-            //        string currentMessageID = getMessageID(mailItem);
-            //        //Console.WriteLine($"Message received on: {mailItem.ReceivedTime} from: {mailItem.SenderName}");
-
-            //        // compare it to the message id we are looking for
-            //        if(currentMessageID == messageID)
-            //        {
-            //            Console.WriteLine($"We found the message with the subject {mailItem.Subject}");
-
-            //            Console.WriteLine("Attempting to open a specific Outlook message via the shell");
-
-            //            string strCommandText = $"/select \"outlook:{mailItem.EntryID}\"";
-
-            //            System.Diagnostics.Process.Start("outlook.exe", strCommandText);
-                        
-            //            return true;
-            //        }
-            //    }
-            //}
-            //return false;
         }
 
         // main function takes a command line argument which is the message ID
         // example being: <BN7PR05MB4322089E8B3FD6E287A05319C85B9@BN7PR05MB4322.namprd05.prod.outlook.com>
         static void Main(string[] args)
         {
-            Console.WriteLine($"Searching for message {args[0]}");
+            Console.WriteLine($"Searching for message with Base64 String: {args[0]}");
             string decodedMessageID = base64Decode(args[0].Substring(10));
             
-            // Console.ReadKey();
-            Console.WriteLine($"Searching for message {decodedMessageID}");
-            List<string> folderNames = getFolders();
+            Console.WriteLine($"Searching for message with MessageID {decodedMessageID}");
+            
+            // Get a listing of all the folders within the Outlook Namespace
+            getFolders();
 
-            foreach(string name in folderNames)
+            // Look for a specific MessageID in every folder that we listed
+            foreach(string name in namespaceFolders)
             {
-                //findMessageByID("<BN7PR05MB4322089E8B3FD6E287A05319C85B9@BN7PR05MB4322.namprd05.prod.outlook.com>", name);
-                // if(findMessageByID(args[0], "000000006C5F7C2868207944B3CA43011342594901005AC540F88BEA6E4995B7DAB7B8B93FC300000000013C0000"))
+
                 if (findMessageByID(decodedMessageID, name))
                         break;
             }
 
-            // Explicitly release objects
+            // Explicitly release the Outlook Interop objects...
             outlookInstance = null;
             outlookNameSpace = null;
         }
