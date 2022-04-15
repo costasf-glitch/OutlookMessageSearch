@@ -18,7 +18,15 @@ namespace OutlookMessageSearch
     {
         private static Application outlookInstance = new Application();
         private static NameSpace outlookNameSpace = outlookInstance.GetNamespace("mapi");
-        
+
+        // Utility method to decode the URI for the task (mostly because browser's will replace special
+        // characters like the '<' and '>' found in the URI
+        private static string base64Decode(string base64EncodedData)
+        {
+            var base64EncodedBytes = System.Convert.FromBase64String(base64EncodedData);
+            return System.Text.Encoding.UTF8.GetString(base64EncodedBytes);
+        }
+
         // Get a list of the EntryIDs for each folder
         // We need this because entering a folder requires the EntryID
         private static List<string> getFolders()
@@ -118,13 +126,18 @@ namespace OutlookMessageSearch
         // example being: <BN7PR05MB4322089E8B3FD6E287A05319C85B9@BN7PR05MB4322.namprd05.prod.outlook.com>
         static void Main(string[] args)
         {
+            Console.WriteLine($"Searching for message {args[0]}");
+            string decodedMessageID = base64Decode(args[0].Substring(10));
+            
+            // Console.ReadKey();
+            Console.WriteLine($"Searching for message {decodedMessageID}");
             List<string> folderNames = getFolders();
 
             foreach(string name in folderNames)
             {
                 //findMessageByID("<BN7PR05MB4322089E8B3FD6E287A05319C85B9@BN7PR05MB4322.namprd05.prod.outlook.com>", name);
                 // if(findMessageByID(args[0], "000000006C5F7C2868207944B3CA43011342594901005AC540F88BEA6E4995B7DAB7B8B93FC300000000013C0000"))
-                if (findMessageByID(args[0], name))
+                if (findMessageByID(decodedMessageID, name))
                         break;
             }
 
